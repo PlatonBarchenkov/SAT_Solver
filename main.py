@@ -220,22 +220,28 @@ def check_equiv_bruteforce(f1_expr: str, f2_expr: str) -> Tuple[bool, float]:
     vars1 = extract_vars(f1_expr)
     vars2 = extract_vars(f2_expr)
     all_vars = sorted(set(vars1) | set(vars2), key=lambda s: int(s[1:]))
+
     f1 = make_circuit_lambda(f1_expr)
     f2 = make_circuit_lambda(f2_expr)
+
     start = time.perf_counter()
+
     if not all_vars:
         env: Dict[str, bool] = {}
         eq = (f1(env) == f2(env))
         dt = (time.perf_counter() - start) * 1000.0
         return eq, dt
+
     n = len(all_vars)
-    if n > 21:
+    if n > 25:
         raise RuntimeError("Too many inputs for brute force")
+
     for bits in product([False, True], repeat=n):
         env = {name: bit for name, bit in zip(all_vars, bits)}
         if f1(env) != f2(env):
             dt = (time.perf_counter() - start) * 1000.0
             return False, dt
+
     dt = (time.perf_counter() - start) * 1000.0
     return True, dt
 
@@ -249,230 +255,21 @@ def check_equiv_z3(f1_expr: str, f2_expr: str) -> Tuple[bool, float]:
     vars1 = extract_vars(f1_expr)
     vars2 = extract_vars(f2_expr)
     all_vars = sorted(set(vars1) | set(vars2), key=lambda s: int(s[1:]))
+
     ctx_vars: Dict[str, Bool] = {name: Bool(name) for name in all_vars}
+
     f1 = build_z3_circuit(f1_expr, ctx_vars)
     f2 = build_z3_circuit(f2_expr, ctx_vars)
+
     miter = Or(And(f1, Not(f2)), And(Not(f1), f2))
+
     s = Solver()
     s.add(miter)
+
     start = time.perf_counter()
     res = s.check()
     dt = (time.perf_counter() - start) * 1000.0
-    return (res != sat), dt
 
-
-CNFClause = List[int]
-CNF = List[CNFClause]
-
-
-def normalize_ast(node: Node) -> Node:
-    if isinstance(node, Var):
-        return node
-    if isinstance(node, NotNode):
-        return NotNode(normalize_ast(node.child))
-    if isinstance(node, BinNode):
-        left = normalize_ast(node.left)
-        right = normalize_ast(node.right)
-        if node.op == "->":
-            return BinNode("|", NotNode(left), right)
-        if node.op == "<->":
-            a_impl_b = BinNode("|", NotNode(left), right)
-            b_impl_a = BinNode("|", NotNode(right), left)
-            return BinNode("&", normalize_ast(a_impl_b), normalize_ast(b_impl_a))
-        if node.op in ("&", "|"):
-            return BinNode(node.op, left, right)
-        raise ValueError(f"unknown op in normalize_ast: {node.op}")
-    raise TypeError("unknown AST node in normalize_ast")
-
-
-def tseitin_cnf(node: Node) -> Tuple[CNF, Dict[str, int], int]:
-    node = normalize_ast(node)
-    cnf: CNF = []
-    var_map: Dict[str, int] = {}
-    next_var = 1
-
-    def encode(n: Node) -> int:
-        nonlocal next_var
-        if isinstance(n, Var):
-            if n.name not in var_map:
-                var_map[n.name] = next_var
-                next_var += 1
-            return var_map[n.name]
-        if isinstance(n, NotNode):
-            p = encode(n.child)
-            v = next_var
-            next_var += 1
-            cnf.append([-v, -p])
-            cnf.append([v, p])
-            return v
-        if isinstance(n, BinNode):
-            if n.op not in ("&", "|"):
-                raise ValueError("tseitin_cnf expects only &, |, ! after normalize")
-            a = encode(n.left)
-            b = encode(n.right)
-            v = next_var
-            next_var += 1
-            if n.op == "&":
-                cnf.append([-v, a])
-                cnf.append([-v, b])
-                cnf.append([v, -a, -b])
-            else:
-                cnf.append([v, -a])
-                cnf.append([v, -b])
-                cnf.append([-v, a, b])
-            return v
-        raise TypeError("unknown AST node in tseitin_cnf")
-
-    top = encode(node)
-    cnf.append([top])
-    return cnf, var_map, next_var - 1
-
-
-def _simplify_clause(clause: CNFClause, assignment: Dict[int, bool]) -> Tuple[str, CNFClause]:
-    new_clause: CNFClause = []
-    for lit in clause:
-        var = abs(lit)
-        val = assignment.get(var)
-        if val is None:
-            new_clause.append(lit)
-        else:
-            if lit > 0:
-                if val is True:
-                    return "sat", []
-            else:
-                if val is False:
-                    return "sat", []
-    if not new_clause:
-        return "conflict", []
-    return "clause", new_clause
-
-
-def unit_propagate(cnf: CNF, assignment: Dict[int, bool]) -> Tuple[CNF, Dict[int, bool], bool]:
-    cnf = [c[:] for c in cnf]
-    changed = True
-    while changed:
-        changed = False
-        unit_literals: List[int] = []
-        new_cnf: CNF = []
-        for clause in cnf:
-            status, simplified = _simplify_clause(clause, assignment)
-            if status == "sat":
-                continue
-            if status == "conflict":
-                return [], assignment, True
-            if len(simplified) == 1:
-                unit_literals.append(simplified[0])
-            new_cnf.append(simplified)
-        for lit in unit_literals:
-            var = abs(lit)
-            val = lit > 0
-            cur = assignment.get(var)
-            if cur is None:
-                assignment[var] = val
-                changed = True
-            elif cur != val:
-                return [], assignment, True
-        cnf = new_cnf
-    return cnf, assignment, False
-
-
-def pure_literal_elimination(cnf: CNF, assignment: Dict[int, bool]) -> Tuple[CNF, Dict[int, bool]]:
-    pos: Dict[int, bool] = {}
-    neg: Dict[int, bool] = {}
-    for clause in cnf:
-        for lit in clause:
-            var = abs(lit)
-            if var in assignment:
-                continue
-            if lit > 0:
-                pos[var] = True
-            else:
-                neg[var] = True
-    pure_assignments: Dict[int, bool] = {}
-    for var in set(list(pos.keys()) + list(neg.keys())):
-        if var in assignment:
-            continue
-        has_pos = var in pos
-        has_neg = var in neg
-        if has_pos and not has_neg:
-            pure_assignments[var] = True
-        elif has_neg and not has_pos:
-            pure_assignments[var] = False
-    if not pure_assignments:
-        return cnf, assignment
-    assignment.update(pure_assignments)
-    new_cnf: CNF = []
-    for clause in cnf:
-        satisfied = False
-        for lit in clause:
-            var = abs(lit)
-            if var in pure_assignments:
-                val = pure_assignments[var]
-                if (lit > 0 and val is True) or (lit < 0 and val is False):
-                    satisfied = True
-                    break
-        if not satisfied:
-            new_cnf.append(clause)
-    return new_cnf, assignment
-
-
-def preprocess_cnf(cnf: CNF) -> Tuple[CNF, Dict[int, bool], bool]:
-    assignment: Dict[int, bool] = {}
-    cnf, assignment, conflict = unit_propagate(cnf, assignment)
-    if conflict:
-        return [], assignment, True
-    changed = True
-    while changed:
-        changed = False
-        cnf_before = cnf
-        assignment_before = dict(assignment)
-        cnf, assignment = pure_literal_elimination(cnf, assignment)
-        cnf, assignment, conflict = unit_propagate(cnf, assignment)
-        if conflict:
-            return [], assignment, True
-        if cnf != cnf_before or assignment != assignment_before:
-            changed = True
-    return cnf, assignment, False
-
-
-def solve_cnf_with_z3(cnf: CNF, assignment: Dict[int, bool]):
-    vars_in_cnf = {abs(lit) for clause in cnf for lit in clause}
-    vars_in_assign = set(assignment.keys())
-    all_vars = sorted(vars_in_cnf | vars_in_assign)
-    z3_vars = {idx: Bool(f"v{idx}") for idx in all_vars}
-    s = Solver()
-    for var, val in assignment.items():
-        lit = z3_vars[var]
-        s.add(lit if val else Not(lit))
-    for clause in cnf:
-        if not clause:
-            s.add(False)
-            break
-        z3_lits = []
-        for lit in clause:
-            var = abs(lit)
-            z = z3_vars[var]
-            z3_lits.append(z if lit > 0 else Not(z))
-        s.add(Or(*z3_lits))
-    return s.check()
-
-
-def check_equiv_z3_preprocessed(f1_expr: str, f2_expr: str) -> Tuple[bool, float]:
-    ast1 = parse(f1_expr)
-    ast2 = parse(f2_expr)
-    miter_ast = BinNode(
-        "|",
-        BinNode("&", ast1, NotNode(ast2)),
-        BinNode("&", NotNode(ast1), ast2),
-    )
-    cnf, var_map, max_var = tseitin_cnf(miter_ast)
-    start = time.perf_counter()
-    cnf_simpl, assignment, conflict = preprocess_cnf(cnf)
-    if conflict:
-        dt = (time.perf_counter() - start) * 1000.0
-        return True, dt
-    res = solve_cnf_with_z3(cnf_simpl, assignment)
-    dt = (time.perf_counter() - start) * 1000.0
     return (res != sat), dt
 
 
@@ -555,48 +352,52 @@ def demo():
         ("(x0 & x1) | (x0 & x2)", "x0 & (x1 | x2)", True),
         ("(x0 | x1) & (!x0 | !x1)", "(x0 & !x1) | (!x0 & x1)", True),
     ]
+
     for _ in range(5):
         f = random_formula(8, 4, min_used_vars=4)
         tests.append((f, f, True))
+
     for _ in range(5):
         f = random_formula(12, 6, min_used_vars=6)
         g = "!(" + f + ")"
         tests.append((f, g, False))
+
     for n in [10, 15, 20]:
         vars_n = [f"x{i}" for i in range(n)]
         f1 = " & ".join(vars_n)
         f2 = " & ".join(reversed(vars_n))
         tests.append((f1, f2, True))
+
     passed = 0
     failed = 0
     total_sat_time = 0.0
-    total_sat_pre_time = 0.0
     total_brute_time = 0.0
+
     for i, (f1, f2, exp) in enumerate(tests, start=1):
         print(f"\n[Test {i}]")
         print(" F1:", f1)
         print(" F2:", f2)
         eq_brute, t_brute = check_equiv_bruteforce(f1, f2)
         eq_z3, t_z3 = check_equiv_z3(f1, f2)
-        eq_z3p, t_z3p = check_equiv_z3_preprocessed(f1, f2)
         total_brute_time += t_brute
         total_sat_time += t_z3
-        total_sat_pre_time += t_z3p
-        same = (eq_brute == eq_z3 == eq_z3p)
+        same = (eq_brute == eq_z3)
         if same:
             passed += 1
         else:
             failed += 1
         print(" expected:", "equiv" if exp else "diff")
-        print(" brute: ", "equiv" if eq_brute else "diff", f"({t_brute:.3f} ms)")
-        print(" Z3:    ", "equiv" if eq_z3 else "diff", f"({t_z3:.3f} ms)")
-        print(" Z3+pre:", "equiv" if eq_z3p else "diff", f"({t_z3p:.3f} ms)")
+        print(" brute: ", "equiv" if eq_brute else "diff",
+              f"({t_brute:.3f} ms)")
+        print(" Z3:   ", "equiv" if eq_z3 else "diff",
+              f"({t_z3:.3f} ms)")
+
     total = passed + failed
     rate = (passed * 100.0 / total) if total else 0.0
+
     print("\nPassed:", passed, "Failed:", failed)
     print(f"Rate: {rate:.1f}%")
     print(f"Total SAT Time: {total_sat_time:.3f} ms")
-    print(f"Total SAT+pre Time: {total_sat_pre_time:.3f} ms")
     print(f"Total Brute Time: {total_brute_time:.3f} ms")
 
 
