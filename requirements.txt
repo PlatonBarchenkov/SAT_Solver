@@ -1,0 +1,2 @@
+matplotlib
+z3-solver

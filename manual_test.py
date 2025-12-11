@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 from main import parse, check_equiv_bruteforce, check_equiv_z3
 
@@ -19,13 +19,14 @@ def read_formula(index: int) -> str:
             print(f"Ошибка разбора: {e}")
 
 
-def run_once() -> Tuple[bool, bool]:
+def run_once() -> Optional[Tuple[bool, bool]]:
     f1 = read_formula(1)
     if not f1:
-        return False, False
+        return None
+
     f2 = read_formula(2)
     if not f2:
-        return False, False
+        return None
 
     print("\nПроверка эквивалентности:")
     print(" F1:", f1)
@@ -48,8 +49,8 @@ def main():
     print("Пустая строка вместо формулы завершает программу.\n")
 
     while True:
-        eq_brute, eq_z3 = run_once()
-        if eq_brute is False and eq_z3 is False:
+        res = run_once()
+        if res is None:
             break
         print()
 
