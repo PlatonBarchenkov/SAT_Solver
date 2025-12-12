@@ -1,4 +1,3 @@
-# benchmark.py
 from __future__ import annotations
 
 import csv
@@ -8,7 +7,7 @@ from main import random_formula, check_equiv_bruteforce, check_equiv_z3
 
 
 def run_benchmark():
-    random.seed(0)  # чтобы эксперименты были воспроизводимыми
+    random.seed(0)
 
     # будем менять число переменных от 2 до 25
     NUM_VARS_LIST = list(range(2, 26))
@@ -31,7 +30,6 @@ def run_benchmark():
                                 depth=FORMULA_DEPTH,
                                 min_used_vars=max(1, n // 2))
 
-            # вторая: иногда делаем эквивалентной первой, иногда случайной
             if random.random() < 0.5:
                 f2 = f1
             else:
@@ -39,9 +37,7 @@ def run_benchmark():
                                     depth=FORMULA_DEPTH,
                                     min_used_vars=max(1, n // 2))
 
-            # замер брутфорса
             eq_bf, t_bf = check_equiv_bruteforce(f1, f2)
-            # замер Z3
             eq_z3, t_z3 = check_equiv_z3(f1, f2)
 
             brute_times.append(t_bf)
@@ -59,7 +55,6 @@ def run_benchmark():
 
         rows.append((n, avg_brute, avg_z3))
 
-    # сохраняем результаты в CSV-файл
     with open("benchmark_results.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["num_vars", "avg_bruteforce_ms", "avg_z3_ms"])
