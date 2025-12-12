@@ -25,7 +25,6 @@ def run_benchmark():
         print(f"\n=== n = {n} переменных ===")
 
         for i in range(TESTS_PER_POINT):
-            # первая формула
             f1 = random_formula(num_vars=n,
                                 depth=FORMULA_DEPTH,
                                 min_used_vars=max(1, n // 2))
