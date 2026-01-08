@@ -1,0 +1,116 @@
+Allowed ops: !, &, |, ->, <->.
+Examples: x0, x1, x2, ...
+Enter empty line to exit.
+[1] >> x0 & x1
+[2] >> x1 & x0
+--------------------
+F1: x0 & x1
+F2: x1 & x0
+Brute : equiv (0.012 ms)
+Z3    : equiv (60.015 ms)
+DPLL  : equiv (0.209 ms)
+CDCL  : equiv (0.370 ms)
+====================
+[1] >> x0 & x1
+[2] >> x0 | x1
+--------------------
+F1: x0 & x1
+F2: x0 | x1
+Brute : diff (0.008 ms)
+Z3    : diff (7.522 ms)
+DPLL  : diff (0.125 ms)
+CDCL  : diff (0.169 ms)
+====================
+[1] >> (x0 & x1) | (x0 & x2)
+[2] >> x0 & (x1 | x2)
+--------------------
+F1: (x0 & x1) | (x0 & x2)
+F2: x0 & (x1 | x2)
+Brute : equiv (0.016 ms)
+Z3    : equiv (1.466 ms)
+DPLL  : equiv (0.649 ms)
+CDCL  : equiv (0.911 ms)
+====================
+[1] >> (x0 & !x1) | (!x0 & x1)
+[2] >> !(x0 <-> x1)
+--------------------
+F1: (x0 & !x1) | (!x0 & x1)
+F2: !(x0 <-> x1)
+Brute : equiv (0.013 ms)
+Z3    : equiv (0.610 ms)
+DPLL  : equiv (0.468 ms)
+CDCL  : equiv (0.949 ms)
+====================
+[1] >> x0 & (x1 | x2)
+[2] >> (x0 & x1) | x2
+--------------------
+F1: x0 & (x1 | x2)
+F2: (x0 & x1) | x2
+Brute : diff (0.010 ms)
+Z3    : diff (0.419 ms)
+DPLL  : diff (0.240 ms)
+CDCL  : diff (0.392 ms)
+====================
+[1] >> (x0 -> x1) & (x0 -> !x1)
+[2] >> !x0
+--------------------
+F1: (x0 -> x1) & (x0 -> !x1)
+F2: !x0
+Brute : equiv (0.011 ms)
+Z3    : equiv (0.352 ms)
+DPLL  : equiv (0.196 ms)
+CDCL  : equiv (0.296 ms)
+====================
+[1] >> (x0 <-> x1) & (x1 <-> x2)
+[2] >> (x0 <-> x2) & (x0 <-> x1)
+--------------------
+F1: (x0 <-> x1) & (x1 <-> x2)
+F2: (x0 <-> x2) & (x0 <-> x1)
+Brute : equiv (0.016 ms)
+Z3    : equiv (0.485 ms)
+DPLL  : equiv (0.475 ms)
+CDCL  : equiv (0.996 ms)
+====================
+[1] >> x0 -> x1
+[2] >> !x0 | x1
+--------------------
+F1: x0 -> x1
+F2: !x0 | x1
+Brute : equiv (0.011 ms)
+Z3    : equiv (0.059 ms)
+DPLL  : equiv (0.130 ms)
+CDCL  : equiv (0.250 ms)
+====================
+[1] >> (!x0 & x1) | (x0 & !x1) | (x2 & x3)
+[2] >> (!(x0 <-> x1)) | (x2 & x3)
+--------------------
+F1: (!x0 & x1) | (x0 & !x1) | (x2 & x3)
+F2: (!(x0 <-> x1)) | (x2 & x3)
+Brute : equiv (0.029 ms)
+Z3    : equiv (0.462 ms)
+DPLL  : equiv (2.396 ms)
+CDCL  : equiv (2.889 ms)
+====================
+[1] >> ((x0 | x1) & (!x2 | x3) & (x4 -> x5))
+[2] >> ((x0 | x1) & (!x2 | x3) & (x4 & x5))
+--------------------
+F1: ((x0 | x1) & (!x2 | x3) & (x4 -> x5))
+F2: ((x0 | x1) & (!x2 | x3) & (x4 & x5))
+Brute : diff (0.026 ms)
+Z3    : diff (0.498 ms)
+DPLL  : diff (0.885 ms)
+CDCL  : diff (1.223 ms)
+====================
+[1] >> ((x0 & x1) | (!x2 & (x3 | x4))) <-> x5
+[2] >> ((x0 & x1) | (!x2 & (x3 & x4))) <-> x5
+--------------------
+F1: ((x0 & x1) | (!x2 & (x3 | x4))) <-> x5
+F2: ((x0 & x1) | (!x2 & (x3 & x4))) <-> x5
+Brute : diff (0.012 ms)
+Z3    : diff (0.537 ms)
+DPLL  : diff (0.642 ms)
+CDCL  : diff (0.901 ms)
+====================
+[1] >>
+
+Process finished with exit code 0
